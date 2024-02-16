@@ -1,0 +1,100 @@
+image: python:3.12
+
+stages:
+  - build
+  - verify
+  - unit-test
+  - integration-test
+  - package
+  - release
+  - pages
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip" # directory where python dependencies are stored
+  VENV_DIR: "$CI_PROJECT_DIR/venv" # directory where the virtual environment takes place
+
+cache:
+  key: "$CI_COMMIT_REF_NAME" # environment variable which contains the name of the branch, the goal is to separate different branches results
+  paths:
+    - $PIP_CACHE_DIR # cache path for python package
+    - $VENV_DIR # cache path for virtual environment.
+
+before_script:
+  - python -m venv $VENV_DIR # creates virtual environment
+  - source $VENV_DIR/bin/activate # activates virtual environmentt
+  - pip install --upgrade pip
+  - pip install --upgrade setuptools
+
+compile:
+  stage: build
+  script:
+    - pip install -r requirements.txt --cache-dir $PIP_CACHE_DIR
+    - echo "Virtual environment and dependencies set up successfully."
+  allow_failure: false
+
+prospector-analysis:
+  stage: verify
+  script:
+    # Run Prospector tool
+    - prospector
+  allow_failure: false
+  dependencies: []
+
+bandit-analysis:
+  stage: verify
+  script:
+    # Run Bandit tool
+    - bandit -r ./application
+    - echo "Static analysis completed successfully."
+  allow_failure: false
+  dependencies: []
+
+unit-test:
+  stage: unit-test
+  script:
+    - pytest tests/unit/
+    # Run unit tests in the 'tests/unit/' directory
+  allow_failure: false
+  artifacts:
+    paths:
+      - $CI_PROJECT_DIR/tests/unit/
+  dependencies: []
+
+integration-test:
+  stage: integration-test
+  script:
+    - pytest tests/integration/
+    # Run integration tests in the 'tests/integration/' directory
+  allow_failure: false
+  artifacts:
+    paths:
+      - $CI_PROJECT_DIR/tests/integration/
+  dependencies: []
+
+package:
+  stage: package
+  script:
+    - python setup.py sdist bdist_wheel
+  allow_failure: false
+  artifacts:
+    paths:
+      - dist/
+
+release:
+  stage: release
+  script:
+    - twine upload -u __token__ -p $PYPI_TOKEN dist/*;
+  allow_failure: false
+
+pages:
+  stage: pages
+  script:
+    - mkdocs build --clean # build the documentation, --clean ensure that previous build artifacts are removed before the new build
+    - mkdir .public # create the '.public' directory used to store doc build files
+    - cp -r public/* .public # copy the built documentation to the '.public' directory.
+  artifacts:
+    paths:
+      - public
+      - mkdocs.yml
+  only:
+    - main

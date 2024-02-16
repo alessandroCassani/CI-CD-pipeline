@@ -1,0 +1,2 @@
+[MASTER]
+ignore=mongo_db_connection.py
